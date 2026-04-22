@@ -1,301 +1,250 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Anime MMO Engine V15</title>
-
 <style>
 body {
   margin: 0;
   overflow: hidden;
-  background: radial-gradient(circle, #1aa7ff, #001b3a);
+  background: radial-gradient(circle, #0b1b2b, #000);
   font-family: Arial;
 }
 
-#world {
-  position: absolute;
-  width: 5000px;
-  height: 5000px;
-  background: radial-gradient(circle, #2ec5ff, #003a70);
-}
-
-#player {
-  width: 35px;
-  height: 35px;
-  position: absolute;
-  border-radius: 50%;
-  background: yellow;
-  box-shadow: 0 0 20px yellow;
-}
-
-.boss {
-  width: 120px;
-  height: 120px;
-  position: absolute;
-  border-radius: 50%;
-  background: darkred;
-  box-shadow: 0 0 40px red;
-}
-
-.island {
-  position: absolute;
-  background: green;
-  border-radius: 50%;
-}
-
-#dialogue {
+/* UI */
+#ui {
   position: fixed;
   bottom: 20px;
-  width: 60%;
-  left: 20%;
-  background: rgba(0,0,0,0.85);
+  left: 20px;
   color: white;
-  padding: 20px;
-  font-size: 18px;
-  display: none;
-  border-radius: 10px;
-  text-align: center;
 }
 
-#controls {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  background: rgba(0,0,0,0.6);
-  color: white;
-  padding: 10px;
-  border-radius: 10px;
+.bar {
+  width: 220px;
+  height: 12px;
+  background: #222;
+  margin: 4px 0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+#hp { height: 100%; background: red; width: 100%; }
+#energy { height: 100%; background: cyan; width: 100%; }
+
+#fruit, #mastery {
+  margin-top: 6px;
+  padding: 4px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 4px;
+}
+
+#hotbar {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+#hotbar div {
+  width: 40px;
+  height: 40px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
 </head>
 
 <body>
 
-<div id="controls">
-WASD Move<br>
-SPACE Attack<br>
-F Fruit<br>
-T Quest<br>
-G Gear 5
-</div>
+<div id="ui">
+  <div class="bar"><div id="hp"></div></div>
+  <div class="bar"><div id="energy"></div></div>
 
-<div id="dialogue"></div>
+  <div id="fruit">🍎 No Fruit</div>
+  <div id="mastery">Mastery: 1</div>
 
-<div id="world">
-  <div id="player"></div>
+  <div id="hotbar">
+    <div>1</div><div>2</div><div>3</div><div>4</div>
+  </div>
 </div>
 
 <script>
-
-/* ======================
-   CORE PLAYER
-====================== */
+/********************
+ PLAYER
+********************/
 let player = {
-  x: 600,
-  y: 600,
-  speed: 6,
+  x: 500,
+  y: 500,
   hp: 100,
-  power: 1
+  maxHp: 100,
+  energy: 100,
+  maxEnergy: 100,
+  power: 1,
+  speed: 5
 };
 
 let keys = {};
+let cooldown = false;
+
+/********************
+ FRUIT + MASTERY
+********************/
+let currentFruit = null;
+
+let mastery = {
+  level: 1,
+  xp: 0
+};
+
+/********************
+ BOSSES
+********************/
+let bosses = [
+  { x: 900, y: 400, hp: 300 }
+];
+
+/********************
+ INPUT
+********************/
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
-const world = document.getElementById("world");
-const playerEl = document.getElementById("player");
-const dialogue = document.getElementById("dialogue");
-
-/* ======================
-   STORY SYSTEM
-====================== */
-let story = { active: false };
-
-function startDialogue(lines, callback) {
-  let i = 0;
-  story.active = true;
-  dialogue.style.display = "block";
-
-  function next() {
-    if (i >= lines.length) {
-      dialogue.style.display = "none";
-      story.active = false;
-      if (callback) callback();
-      return;
-    }
-    dialogue.innerText = lines[i++];
-  }
-
-  next();
-  document.onkeydown = e => {
-    if (e.key === " ") next();
-  };
-}
-
-/* ======================
-   TUTORIAL
-====================== */
-function tutorial() {
-  startDialogue([
-    "Welcome to the Anime Seas",
-    "WASD = Move",
-    "SPACE = Attack",
-    "F = Fruit Awakening",
-    "T = Quest",
-    "G = Gear 5 Transformation"
-  ]);
-}
-
-/* ======================
-   FRUIT AWAKENING
-====================== */
-function fruit() {
-  startDialogue([
-    "Energy awakens inside you...",
-    "⚡ Fruit Awakening ⚡"
-  ], () => {
-    player.power = 4;
-    player.speed = 10;
-    playerEl.style.background = "white";
-    playerEl.style.boxShadow = "0 0 80px cyan";
-  });
-}
-
-/* ======================
-   GEAR 5 CINEMATIC
-====================== */
-function gear5() {
-
-  startDialogue([
-    "......",
-    "Reality begins to break...",
-    "⚡ GEAR 5 AWAKENING ⚡"
-  ], () => {
-
-    player.power = 10;
-    player.speed = 16;
-    playerEl.style.background = "white";
-    playerEl.style.boxShadow = "0 0 120px white, 0 0 200px cyan";
-
-    document.body.style.filter = "brightness(1.5)";
-    setTimeout(() => document.body.style.filter = "none", 2000);
-  });
-}
-
-/* ======================
-   ISLANDS
-====================== */
-for (let i = 0; i < 5; i++) {
-  let el = document.createElement("div");
-  el.className = "island";
-  el.style.width = "200px";
-  el.style.height = "200px";
-  el.style.left = Math.random()*4500 + "px";
-  el.style.top = Math.random()*4500 + "px";
-  world.appendChild(el);
-}
-
-/* ======================
-   BOSSES
-====================== */
-let bosses = [];
-
-function spawnBoss() {
-  let el = document.createElement("div");
-  el.className = "boss";
-
-  bosses.push({
-    x: Math.random()*4000,
-    y: Math.random()*4000,
-    hp: 400,
-    phase: 1,
-    el
-  });
-
-  world.appendChild(el);
-}
-
-for (let i = 0; i < 3; i++) spawnBoss();
-
-/* ======================
-   MOVEMENT
-====================== */
+/********************
+ MOVEMENT
+********************/
 function move() {
+  if (keys["w"]) player.y -= player.speed;
+  if (keys["s"]) player.y += player.speed;
+  if (keys["a"]) player.x -= player.speed;
+  if (keys["d"]) player.x += player.speed;
+}
 
-  if (!story.active) {
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
+/********************
+ COMBAT SYSTEM
+********************/
+function attack() {
+
+  if (cooldown || player.energy < 10) return;
+
+  cooldown = true;
+  player.energy -= 10;
+
+  bosses.forEach(b => {
+
+    let d = Math.hypot(player.x - b.x, player.y - b.y);
+
+    if (d < 120) {
+
+      let dmg = 20 * player.power * getMultiplier();
+      b.hp -= dmg;
+
+      // hit feedback
+      document.body.style.filter = "brightness(2)";
+      setTimeout(() => document.body.style.filter = "", 80);
+
+      gainMastery(5);
+    }
+  });
+
+  setTimeout(() => cooldown = false, 250);
+}
+
+/********************
+ FRUIT SYSTEM
+********************/
+function eatFruit() {
+
+  if (currentFruit) return;
+
+  currentFruit = { name: "Fire Fruit" };
+
+  player.power += 2;
+
+  document.getElementById("fruit").innerText =
+    "🍎 " + currentFruit.name;
+}
+
+/********************
+ MASTERY SYSTEM
+********************/
+function gainMastery(xp) {
+
+  mastery.xp += xp;
+
+  if (mastery.xp >= mastery.level * 20) {
+    mastery.xp = 0;
+    mastery.level++;
+    player.power += 0.2;
   }
 
-  world.style.transform =
-    `translate(${-player.x + 400}px, ${-player.y + 300}px)`;
-
-  playerEl.style.left = player.x + "px";
-  playerEl.style.top = player.y + "px";
+  document.getElementById("mastery").innerText =
+    "Mastery: " + mastery.level;
 }
 
-/* ======================
-   ATTACK
-====================== */
-function attack() {
-  bosses.forEach(b => {
-    let d = Math.hypot(player.x-b.x, player.y-b.y);
-    if (d < 120) b.hp -= 10 * player.power;
-  });
+function getMultiplier() {
+  return 1 + mastery.level * 0.05;
 }
 
-/* ======================
-   BOSS AI + PHASES
-====================== */
-function bossAI() {
-  bosses.forEach(b => {
+/********************
+ UI UPDATE
+********************/
+function updateUI() {
 
-    let r = b.hp / 400;
+  document.getElementById("hp").style.width =
+    (player.hp / player.maxHp * 100) + "%";
 
-    if (r < 0.6) {
-      b.phase = 2;
-      b.el.style.background = "orange";
-    }
-
-    if (r < 0.3) {
-      b.phase = 3;
-      b.el.style.background = "purple";
-    }
-
-    b.x += (player.x - b.x) * 0.01 * b.phase;
-    b.y += (player.y - b.y) * 0.01 * b.phase;
-
-    b.el.style.left = b.x + "px";
-    b.el.style.top = b.y + "px";
-  });
+  document.getElementById("energy").style.width =
+    (player.energy / player.maxEnergy * 100) + "%";
 }
 
-/* ======================
-   INPUTS
-====================== */
-document.addEventListener("keydown", e => {
+/********************
+ SAVE / LOAD
+********************/
+function saveGame() {
+  localStorage.setItem("save", JSON.stringify({
+    player,
+    mastery,
+    currentFruit
+  }));
+}
 
-  if (e.key === " ") attack();
-  if (e.key === "f") fruit();
-  if (e.key === "t") tutorial();
-  if (e.key === "g") gear5();
-});
+function loadGame() {
+  let data = JSON.parse(localStorage.getItem("save"));
+  if (!data) return;
 
-/* ======================
-   LOOP
-====================== */
+  player = data.player;
+  mastery = data.mastery;
+  currentFruit = data.currentFruit;
+
+  if (currentFruit) {
+    document.getElementById("fruit").innerText =
+      "🍎 " + currentFruit.name;
+  }
+}
+
+/********************
+ LOOP
+********************/
 function loop() {
+
   move();
-  bossAI();
+  updateUI();
+
   requestAnimationFrame(loop);
 }
 
 loop();
 
-/* START */
-window.onload = tutorial;
+/********************
+ CONTROLS
+********************/
+document.addEventListener("keydown", e => {
 
+  if (e.key === " ") attack();
+  if (e.key === "f") eatFruit();
+  if (e.key === "p") saveGame();
+  if (e.key === "o") loadGame();
+});
 </script>
 
 </body>
