@@ -1,253 +1,172 @@
-// ===== IMPORTS =====
-const http = require("http");
-const WebSocket = require("ws");
-
-// ===== HTTP SERVER (SERVES GAME) =====
-const server = http.createServer((req, res) => {
-res.writeHead(200, {"Content-Type":"text/html"});
-
-res.end(`
 <!DOCTYPE html>
 <html>
-<body style="margin:0;background:black;color:white;font-family:sans-serif;">
-<canvas id="c"></canvas>
+<head>
+<style>
+body {
+  margin: 0;
+  background: #0d0d0d;
+  overflow: hidden;
+  font-family: Arial;
+}
 
-<div style="position:fixed;bottom:10px;left:10px;">
-<div id="hp"></div>
-<div id="energy"></div>
-<div id="mastery"></div>
-<div id="fruit"></div>
-</div>
+#player {
+  position: absolute;
+  width: 30px;
+  height: 40px;
+  background: linear-gradient(#111, #555);
+  border: 2px solid cyan;
+  border-radius: 6px;
+}
+
+.enemy {
+  position: absolute;
+  width: 30px;
+  height: 40px;
+  background: linear-gradient(#500, #a00);
+  border: 2px solid red;
+  border-radius: 6px;
+}
+
+.slash {
+  position: absolute;
+  width: 50px;
+  height: 20px;
+  background: linear-gradient(white, cyan);
+  opacity: 0.8;
+  border-radius: 10px;
+}
+
+#ui {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<div id="player"></div>
+<div id="ui">HP: 100 | Score: 0</div>
 
 <script>
-// ===== CANVAS =====
-let c = document.getElementById("c");
-let ctx = c.getContext("2d");
-c.width = innerWidth;
-c.height = innerHeight;
-
-// ===== CLIENT STATE =====
-let socket = new WebSocket("ws://" + location.host);
-let myId;
-let players = {};
-let fruits = [];
-let bosses = [];
-let projectiles = [];
-
-let player = {x:0,y:0};
-let keys = {};
-
-// ===== INPUT =====
-onkeydown = e => keys[e.key] = true;
-onkeyup = e => keys[e.key] = false;
-
-// ===== NETWORK =====
-socket.onmessage = msg => {
-let d = JSON.parse(msg.data);
-if (d.type === "init") myId = d.id;
-
-players = d.players;
-fruits = d.fruits;
-bosses = d.bosses;
-projectiles = d.projectiles;
+let player = {
+  x: 300,
+  y: 300,
+  hp: 100,
+  speed: 4
 };
 
-// ===== ABILITIES =====
-function useAbility() {
-socket.send(JSON.stringify({type:"ability"}));
+let keys = {};
+let enemies = [];
+let score = 0;
+
+const playerEl = document.getElementById("player");
+const ui = document.getElementById("ui");
+
+/******** INPUT ********/
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+/******** SPAWN ENEMIES ********/
+setInterval(() => {
+  let e = document.createElement("div");
+  e.className = "enemy";
+
+  let enemy = {
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    hp: 30,
+    el: e
+  };
+
+  document.body.appendChild(e);
+  enemies.push(enemy);
+
+}, 2000);
+
+/******** ATTACK ********/
+function attack() {
+
+  let slash = document.createElement("div");
+  slash.className = "slash";
+
+  slash.style.left = player.x + "px";
+  slash.style.top = player.y + "px";
+
+  document.body.appendChild(slash);
+
+  setTimeout(() => slash.remove(), 150);
+
+  enemies.forEach((e, i) => {
+
+    let dist = Math.hypot(player.x - e.x, player.y - e.y);
+
+    if (dist < 80) {
+      e.hp -= 20;
+
+      if (e.hp <= 0) {
+        e.el.remove();
+        enemies.splice(i, 1);
+        score += 10;
+      }
+    }
+  });
 }
 
-// ===== LOOP =====
-function loop(){
+/******** GAME LOOP ********/
+function loop() {
 
-// movement
-if(keys["w"]) player.y -= 4;
-if(keys["s"]) player.y += 4;
-if(keys["a"]) player.x -= 4;
-if(keys["d"]) player.x += 4;
+  // movement
+  if (keys["w"]) player.y -= player.speed;
+  if (keys["s"]) player.y += player.speed;
+  if (keys["a"]) player.x -= player.speed;
+  if (keys["d"]) player.x += player.speed;
 
-// send to server
-socket.send(JSON.stringify({type:"move",x:player.x,y:player.y}));
+  playerEl.style.left = player.x + "px";
+  playerEl.style.top = player.y + "px";
 
-ctx.clearRect(0,0,c.width,c.height);
+  // enemy AI
+  enemies.forEach(e => {
 
-// ===== DRAW PLAYERS =====
-for(let id in players){
-let p = players[id];
-ctx.fillStyle = id === myId ? "cyan" : "blue";
-ctx.fillRect(p.x,p.y,20,20);
+    let dx = player.x - e.x;
+    let dy = player.y - e.y;
+
+    let dist = Math.hypot(dx, dy);
+
+    if (dist > 1) {
+      e.x += dx / dist * 1.5;
+      e.y += dy / dist * 1.5;
+    }
+
+    // damage player
+    if (dist < 30) {
+      player.hp -= 0.2;
+    }
+
+    e.el.style.left = e.x + "px";
+    e.el.style.top = e.y + "px";
+  });
+
+  // update UI
+  ui.innerText = "HP: " + Math.floor(player.hp) + " | Score: " + score;
+
+  if (player.hp <= 0) {
+    alert("Game Over! Score: " + score);
+    location.reload();
+  }
+
+  requestAnimationFrame(loop);
 }
 
-// ===== DRAW BOSSES =====
-bosses.forEach(b=>{
-ctx.fillStyle = "red";
-ctx.fillRect(b.x,b.y,50,50);
-ctx.fillStyle = "white";
-ctx.fillText(Math.floor(b.hp),b.x,b.y-5);
-});
-
-// ===== DRAW FRUITS =====
-fruits.forEach(f=>{
-ctx.fillStyle = "orange";
-ctx.fillRect(f.x,f.y,10,10);
-
-// pickup
-if(Math.hypot(player.x-f.x,player.y-f.y)<20){
-socket.send(JSON.stringify({type:"pickup",id:f.id}));
-}
-});
-
-// ===== DRAW PROJECTILES =====
-projectiles.forEach(p=>{
-ctx.fillStyle="yellow";
-ctx.fillRect(p.x,p.y,6,6);
-});
-
-// ===== UI =====
-let me = players[myId];
-if(me){
-hp.innerText = "HP: " + Math.floor(me.hp);
-energy.innerText = "Energy: " + Math.floor(me.energy);
-mastery.innerText = "Mastery: " + Math.floor(me.mastery);
-fruit.innerText = "Fruit: " + (me.fruit || "None");
-}
-
-requestAnimationFrame(loop);
-}
 loop();
 
-// ===== CONTROLS =====
-onkeydown = e=>{
-keys[e.key]=true;
-
-if(e.key===" ") useAbility();
-};
-onkeyup = e=>keys[e.key]=false;
-
+/******** CONTROLS ********/
+document.addEventListener("keydown", e => {
+  if (e.key === " ") attack();
+});
 </script>
+
 </body>
 </html>
-`);
-});
-
-// ===== WEBSOCKET SERVER =====
-const wss = new WebSocket.Server({ server });
-
-// ===== WORLD STATE =====
-let players = {};
-let fruits = [];
-let bosses = [{id:1,x:500,y:300,hp:500}];
-let projectiles = [];
-
-// ===== FRUIT SPAWNER =====
-setInterval(()=>{
-fruits.push({
-id:Math.random().toString(36).substr(2,6),
-x:Math.random()*800,
-y:Math.random()*600
-});
-},15000);
-
-// ===== GAME LOOP =====
-setInterval(()=>{
-
-// move projectiles
-projectiles.forEach(p=>{
-p.x += p.vx;
-p.y += p.vy;
-
-// hit players
-Object.entries(players).forEach(([id,pl])=>{
-if(id!==p.owner && Math.hypot(p.x-pl.x,p.y-pl.y)<15){
-pl.hp -= 10;
-}
-});
-
-// hit bosses
-bosses.forEach(b=>{
-if(Math.hypot(p.x-b.x,p.y-b.y)<30){
-b.hp -= 15;
-}
-});
-});
-
-// regen energy
-Object.values(players).forEach(p=>{
-p.energy = Math.min(100, p.energy + 0.5);
-});
-
-broadcast();
-
-},50);
-
-// ===== CONNECTION =====
-wss.on("connection", ws=>{
-
-let id = Math.random().toString(36).substr(2,9);
-
-players[id] = {
-x:100,
-y:100,
-hp:100,
-energy:100,
-fruit:null,
-mastery:1
-};
-
-ws.send(JSON.stringify({type:"init",id}));
-
-ws.on("message", msg=>{
-
-let d = JSON.parse(msg);
-let p = players[id];
-if(!p) return;
-
-// movement
-if(d.type==="move"){
-p.x = d.x;
-p.y = d.y;
-}
-
-// fruit pickup
-if(d.type==="pickup"){
-let i = fruits.findIndex(f=>f.id===d.id);
-if(i!==-1){
-p.fruit = "Fire";
-fruits.splice(i,1);
-}
-}
-
-// ability
-if(d.type==="ability"){
-if(p.energy < 10) return;
-
-p.energy -= 10;
-p.mastery += 0.2;
-
-// shoot projectile
-projectiles.push({
-x:p.x,
-y:p.y,
-vx:(Math.random()-0.5)*6,
-vy:(Math.random()-0.5)*6,
-owner:id
-});
-}
-
-});
-
-// disconnect
-ws.on("close",()=>delete players[id]);
-
-});
-
-// ===== BROADCAST =====
-function broadcast(){
-let data = JSON.stringify({players,fruits,bosses,projectiles});
-wss.clients.forEach(c=>c.send(data));
-}
-
-// ===== START SERVER =====
-server.listen(3000,()=>{
-console.log("🌍 MMO running at http://localhost:3000");
-});
